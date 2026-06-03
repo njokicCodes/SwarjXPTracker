@@ -399,7 +399,6 @@
     </div>
     <div class="settings-row">
       <span id="next-level-label" style="font-size:13px; color:var(--text2);"></span>
-      <button class="btn-sm" onclick="exportJSON()" title="Export state as JSON for Scriptable widget">⬇ Export</button>
       <button class="btn-sm btn-reset" onclick="resetAll()">Reset all</button>
     </div>
   </div>
@@ -536,31 +535,6 @@ function resetAll() {
   if (!confirm('Reset level, XP, and all quests?')) return;
   state = { level: 1, xp: 0, quests: [] };
   save(); render();
-}
-
-function exportJSON() {
-  const needed = xpForLevel(state.level);
-  const payload = {
-    level: state.level,
-    xp: state.xp,
-    xpNeeded: needed,
-    xpPercent: Math.min(100, Math.round(state.xp / needed * 100)),
-    quests: state.quests.map(q => ({
-      name: q.name,
-      xp: q.xp,
-      parts: q.parts,
-      progress: q.progress,
-      done: q.progress >= q.parts
-    })),
-    exportedAt: new Date().toISOString()
-  };
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'quest-tracker.json';
-  a.click();
-  URL.revokeObjectURL(url);
 }
 
 document.getElementById('quest-name-input').addEventListener('keydown', e => { if (e.key === 'Enter') addQuest(); });
