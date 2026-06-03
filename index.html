@@ -399,7 +399,7 @@
     </div>
     <div class="settings-row">
       <span id="next-level-label" style="font-size:13px; color:var(--text2);"></span>
-      <button class="btn-sm" onclick="exportJSON()" title="Export state as JSON for Scriptable widget">⬇ Export</button>
+      <button class="btn-sm" id="sync-btn" onclick="syncToWidget()">⚡ Sync Widget</button>
       <button class="btn-sm btn-reset" onclick="resetAll()">Reset all</button>
     </div>
   </div>
@@ -538,9 +538,9 @@ function resetAll() {
   save(); render();
 }
 
-function exportJSON() {
+function buildPayload() {
   const needed = xpForLevel(state.level);
-  const payload = {
+  return {
     level: state.level,
     xp: state.xp,
     xpNeeded: needed,
@@ -554,13 +554,28 @@ function exportJSON() {
     })),
     exportedAt: new Date().toISOString()
   };
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'quest-tracker.json';
-  a.click();
-  URL.revokeObjectURL(url);
+}
+
+async function syncToWidget() {
+  const btn = document.getElementById('sync-btn');
+  const payload = JSON.stringify(buildPayload(), null, 2);
+  try {
+    await navigator.clipboard.writeText(payload);
+    // Flash button to confirm copy
+    btn.textContent = '✓ Copied!';
+    btn.style.color = 'var(--success)';
+    btn.style.borderColor = 'var(--success)';
+    setTimeout(() => {
+      btn.textContent = '⚡ Sync Widget';
+      btn.style.color = '';
+      btn.style.borderColor = '';
+      // Open Shortcuts after brief delay so clipboard is ready
+      window.location.href = 'shortcuts://run-shortcut?name=QuestTrackerSync';
+    }, 400);
+  } catch (e) {
+    // Clipboard API may need a user gesture on some iOS versions — fallback alert
+    alert('Copy this JSON manually:\n\n' + payload);
+  }
 }
 
 document.getElementById('quest-name-input').addEventListener('keydown', e => { if (e.key === 'Enter') addQuest(); });
