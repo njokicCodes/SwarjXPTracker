@@ -7,8 +7,6 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="apple-mobile-web-app-title" content="Quest Tracker" />
 <meta name="theme-color" content="#0e0c1a" />
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Quest Tracker</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -332,7 +330,30 @@
   .add-form input::placeholder { color: var(--text3); }
   .input-name { flex: 1; min-width: 160px; }
   .input-xp { width: 80px; }
-  .btn-add {
+  .input-parts { width: 70px; }
+
+  .quest-progress {
+    font-size: 12px;
+    color: var(--text3);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .quest-progress.done { color: var(--success); }
+
+  .btn-progress {
+    background: var(--surface2);
+    border: 0.5px solid var(--border2);
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 13px;
+    color: var(--text2);
+    cursor: pointer;
+    font-family: 'Crimson Pro', serif;
+    white-space: nowrap;
+    transition: background 0.15s, color 0.15s;
+    flex-shrink: 0;
+  }
+  .btn-progress:hover, .btn-progress:active { background: var(--accent-dim); color: var(--accent); border-color: var(--accent); }
     background: var(--accent2);
     border: none;
     border-radius: 10px;
@@ -385,7 +406,7 @@
   <div class="card">
     <div class="level-panel">
       <div class="level-badge">
-        <span class="lbl">Current Level</span>
+        <span class="lbl">Power Level</span>
         <div class="level-num" id="level-display">1</div>
       </div>
       <div class="xp-section">
@@ -398,10 +419,16 @@
         </div>
       </div>
     </div>
+    <!-- XP-per-level manual setting disabled — now formula-based: 1000 + 50 * level
     <div class="settings-row">
       <label for="xp-needed-input">XP per level:</label>
       <input type="number" id="xp-needed-input" min="1" value="100" />
       <button class="btn-sm" onclick="setXpPerLevel()">Set</button>
+      <button class="btn-sm btn-reset" onclick="resetAll()">Reset all</button>
+    </div>
+    -->
+    <div class="settings-row">
+      <span id="next-level-label" style="font-size:13px; color:var(--text2);"></span>
       <button class="btn-sm btn-reset" onclick="resetAll()">Reset all</button>
     </div>
   </div>
@@ -413,6 +440,7 @@
     <div class="add-form">
       <input class="input-name" type="text" id="quest-name-input" placeholder="Quest name…" autocomplete="off" />
       <input class="input-xp" type="number" id="quest-xp-input" placeholder="XP" min="1" />
+      <input class="input-parts" type="number" id="quest-parts-input" placeholder="Parts" min="1" value="1" title="Number of parts" />
       <button class="btn-add" onclick="addQuest()">+ Add</button>
     </div>
   </div>
@@ -423,38 +451,56 @@
 
 <script>
 const ICONS = ['⚔','🗡','🛡','🏹','🔮','📜','💀','🐉','🧙','🗺'];
-let state = { level: 1, xp: 0, xpPerLevel: 100, quests: [] };
+let state = { level: 1, xp: 0, quests: [] };
 
-function save() { try { localStorage.setItem('rpg-state-v1', JSON.stringify(state)); } catch(e) {} }
+// XP required to level up FROM a given level: 1000 + 50 * level
+function xpForLevel(level) { return 1000 + 50 * level; }
+
+function save() { try { localStorage.setItem('rpg-state-v2', JSON.stringify(state)); } catch(e) {} }
 function load() {
   try {
-    const d = localStorage.getItem('rpg-state-v1');
+    const d = localStorage.getItem('rpg-state-v2');
     if (d) state = JSON.parse(d);
   } catch(e) {}
-  document.getElementById('xp-needed-input').value = state.xpPerLevel;
   render();
 }
 
 function render() {
+  const needed = xpForLevel(state.level);
   document.getElementById('level-display').textContent = state.level;
-  const pct = Math.min(100, Math.round(state.xp / state.xpPerLevel * 100));
+  const pct = Math.min(100, Math.round(state.xp / needed * 100));
   document.getElementById('xp-bar').style.width = pct + '%';
-  document.getElementById('xp-label').textContent = state.xp + ' / ' + state.xpPerLevel + ' XP';
+  document.getElementById('xp-label').textContent = state.xp + ' / ' + needed + ' XP';
+  document.getElementById('next-level-label').textContent =
+    'Next level: ' + needed + ' XP  (level ' + state.level + ' → ' + (state.level + 1) + ')';
 
   const list = document.getElementById('quest-list');
   if (!state.quests.length) {
     list.innerHTML = '<div class="empty-state">No active quests — venture forth and add one</div>';
     return;
   }
-  list.innerHTML = state.quests.map((q, i) => `
-    <div class="quest-row">
-      <div class="quest-icon">${q.icon}</div>
-      <span class="quest-name">${escHtml(q.name)}</span>
-      <span class="quest-xp-badge">+${q.xp} XP</span>
-      <button class="btn-complete" onclick="completeQuest(${i})">✓ Complete</button>
-      <button class="btn-del" onclick="deleteQuest(${i})" aria-label="Delete">✕</button>
-    </div>
-  `).join('');
+  list.innerHTML = state.quests.map((q, i) => {
+    const isMulti = q.parts > 1;
+    const done = q.progress >= q.parts;
+    const progressLabel = isMulti
+      ? `<span class="quest-progress${done ? ' done' : ''}">${q.progress}/${q.parts}</span>`
+      : '';
+    const actionBtn = done
+      ? `<button class="btn-complete" onclick="completeQuest(${i})">✓ Complete</button>`
+      : isMulti
+        ? `<button class="btn-progress" onclick="incrementQuest(${i})">+ Progress</button>`
+        : `<button class="btn-complete" onclick="completeQuest(${i})">✓ Complete</button>`;
+    return `
+      <div class="quest-row">
+        <div class="quest-icon">${q.icon}</div>
+        <span class="quest-name">${escHtml(q.name)}</span>
+        ${progressLabel}
+        <span class="quest-xp-badge">+${q.xp} XP</span>
+        ${actionBtn}
+        <button class="btn-del" onclick="deleteQuest(${i})" aria-label="Delete">✕</button>
+      </div>
+    `;
+  }).join('');
 }
 
 function escHtml(s) {
@@ -464,8 +510,8 @@ function escHtml(s) {
 function addXp(amount) {
   let leveled = false;
   state.xp += amount;
-  while (state.xp >= state.xpPerLevel) {
-    state.xp -= state.xpPerLevel;
+  while (state.xp >= xpForLevel(state.level)) {
+    state.xp -= xpForLevel(state.level);
     state.level += 1;
     leveled = true;
   }
@@ -486,6 +532,12 @@ function showToast(msg) {
   setTimeout(() => t.classList.remove('show'), 2200);
 }
 
+function incrementQuest(i) {
+  const q = state.quests[i];
+  if (q.progress < q.parts) q.progress += 1;
+  save(); render();
+}
+
 function completeQuest(i) {
   const q = state.quests[i];
   addXp(q.xp);
@@ -501,26 +553,20 @@ function deleteQuest(i) {
 function addQuest() {
   const name = document.getElementById('quest-name-input').value.trim();
   const xp = parseInt(document.getElementById('quest-xp-input').value);
+  const parts = Math.max(1, parseInt(document.getElementById('quest-parts-input').value) || 1);
   if (!name || !xp || xp < 1) return;
   const icon = ICONS[Math.floor(Math.random() * ICONS.length)];
-  state.quests.push({ name, xp, icon });
+  state.quests.push({ name, xp, icon, parts, progress: 0 });
   document.getElementById('quest-name-input').value = '';
   document.getElementById('quest-xp-input').value = '';
+  document.getElementById('quest-parts-input').value = '1';
   save(); render();
   document.getElementById('quest-name-input').focus();
 }
 
-function setXpPerLevel() {
-  const v = parseInt(document.getElementById('xp-needed-input').value);
-  if (!v || v < 1) return;
-  state.xpPerLevel = v;
-  if (state.xp >= state.xpPerLevel) state.xp = state.xpPerLevel - 1;
-  save(); render();
-}
-
 function resetAll() {
   if (!confirm('Reset level, XP, and all quests?')) return;
-  state = { level: 1, xp: 0, xpPerLevel: state.xpPerLevel, quests: [] };
+  state = { level: 1, xp: 0, quests: [] };
   save(); render();
 }
 
